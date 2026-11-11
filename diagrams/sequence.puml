@@ -1,0 +1,65 @@
+@startuml
+title Лабораторная №5, вариант 27: HTTP/1.1-сервер (TCP, Winsock2)
+skinparam sequenceMessageAlign left
+participant "Клиент 1\n(client.exe)" as C1
+participant "Клиент 2\n(client.exe)" as C2
+participant "Сервер\n(accept-поток)" as S
+participant "Поток соединения" as W
+database "Каталог www" as FS
+
+== Запуск сервера ==
+S -> S : WSAStartup(2.2)
+S -> S : socket(AF_INET, SOCK_STREAM)
+S -> S : bind(127.0.0.1:20113)
+S -> S : listen(SOMAXCONN)
+note right of S : START в журнале
+
+== Подключение двух клиентов ==
+C1 -> S : connect() — SYN
+S --> C1 : SYN+ACK
+C1 -> S : ACK (соединение установлено)
+S -> S : accept() -> сокет клиента 1
+S -> W : создать поток (conn=1)
+C2 -> S : connect() — SYN / SYN+ACK / ACK
+S -> S : accept() -> сокет клиента 2
+S -> W : создать поток (conn=2)
+
+== Успешный запрос (клиент 1) ==
+C1 -> W : send("GET /1kb.txt HTTP/1.1 ... \r\n\r\n")
+loop пока не получен \r\n\r\n (лимит 8192 байта, тайм-аут)
+  W -> W : recv() — частичное получение
+end
+W -> W : разбор запроса (метод, версия, Host)
+W -> W : проверка пути: decode -> сегменты -> канонизация -> префикс www
+W -> FS : CreateFile + ReadFile
+FS --> W : содержимое файла
+W -> C1 : send(заголовки 200 OK + Content-Length + Connection: close)
+loop пока не отправлено всё
+  W -> C1 : send(кусок тела) — учёт частичной отправки
+end
+
+== Ошибки (клиент 2) ==
+C2 -> W : send("GET /nope.txt HTTP/1.1 ...")
+W -> W : разбор, проверка пути
+W -> FS : открыть файл
+FS --> W : не найден
+W -> C2 : send(404 Not Found + тело)
+note over W : попытка выхода за www (/../secret.txt)\n-> 404 + событие SECURITY в журнале
+C2 -> W : send("GET /a HTTP/9.9\r\n\r\n")
+W -> C2 : send(400 Bad Request)
+
+== Закрытие соединения ==
+W -> C1 : shutdown(SD_SEND) — FIN
+C1 --> W : FIN (recv()==0)
+W -> W : closesocket(); лог CLIENT_DISCONNECTED
+W -> C2 : shutdown(SD_SEND)
+C2 --> W : FIN
+W -> W : closesocket()
+
+== Штатная остановка сервера ==
+note over S : Ctrl+C / Ctrl+Break / "q"
+S -> S : прекратить accept(); closesocket(слушающий)
+S -> W : дождаться активных запросов (с ограничением по времени)
+S -> S : вывести статистику
+S -> S : WSACleanup(); код возврата 0
+@enduml

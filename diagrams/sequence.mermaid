@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant C1 as Клиент 1
+    participant C2 as Клиент 2
+    participant S as Сервер (accept)
+    participant W as Поток соединения
+    participant FS as Каталог www
+    Note over S: WSAStartup, socket, bind, listen
+    C1->>S: connect (SYN, SYN+ACK, ACK)
+    S->>W: accept -> поток conn=1
+    C2->>S: connect (SYN, SYN+ACK, ACK)
+    S->>W: accept -> поток conn=2
+    C1->>W: send GET /1kb.txt
+    loop recv до \r\n\r\n
+        W->>W: recv (частичное получение)
+    end
+    W->>W: парсинг и проверка пути
+    W->>FS: открыть и прочитать файл
+    FS-->>W: данные
+    W->>C1: send 200 OK + файл (цикл send)
+    C2->>W: send GET /nope.txt
+    W->>C2: send 404 Not Found
+    C2->>W: send некорректный запрос
+    W->>C2: send 400 Bad Request
+    W->>C1: shutdown(SD_SEND), closesocket
+    W->>C2: shutdown(SD_SEND), closesocket
+    Note over S: Ctrl+C: closesocket(listen), ожидание потоков, статистика, WSACleanup
