@@ -1,0 +1,1 @@
+Decoy: sibling directory whose name starts with 'www'.
