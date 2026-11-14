@@ -1,0 +1,19 @@
+{
+  "student_id": 113,
+  "seed": 11961,
+  "port": 20113,
+  "host": "127.0.0.1",
+  "count": 200,
+  "runs": 3,
+  "timeout_ms": 5000,
+  "warmup": 20,
+  "timestamp": "2026-11-14T09:50:30",
+  "configs": [
+    [
+      "X",
+      5,
+      "/64kb.html",
+      "64 КБ"
+    ]
+  ]
+}
